@@ -1,0 +1,16 @@
+<gpx>
+    <trk>
+        <trkpt lat="0.4" lon="23.1">
+            <ele>10</ele>
+            <time>2000-01-11T01:10:05Z</time>
+        </trkpt>
+        <trkpt lat="0.5" lon="33.1">
+            <ele>20</ele>
+            <time>2001-02-12T02:20:15Z</time>
+        </trkpt>
+        <trkpt lat="0.6" lon="43.1">
+            <ele>30</ele>
+            <time>2002-03-13T03:30:25Z</time>
+        </trkpt>
+    </trk>
+</gpx>

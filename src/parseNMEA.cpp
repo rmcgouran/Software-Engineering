@@ -51,7 +51,7 @@ namespace NMEA
         std::vector<std::string> fields;
         std::string dataContainer = "";
 
-        //Loop pushes seperate fields into the vector value
+        //Loop pushes seperate fields into the array value
         for (unsigned int i = 7 ; i <sentence.length() - 2; i++){
             char Container = sentence[i];
             if ((Container == ',')|| (Container == '*')){

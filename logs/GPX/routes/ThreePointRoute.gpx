@@ -1,0 +1,13 @@
+<gpx>
+    <rte>
+        <rtept lat="0.4" lon="23.1">
+            <ele>10</ele>
+        </rtept>
+        <rtept lat="0.5" lon="33.1">
+            <ele>20</ele>
+        </rtept>
+        <rtept lat="0.6" lon="43.1">
+            <ele>30</ele>
+        </rtept>
+    </rte>
+</gpx>
