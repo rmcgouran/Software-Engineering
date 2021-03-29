@@ -1,38 +1,33 @@
-#include "xml/parser.h"
 #include "parseGPX.h"
 
 namespace GPX {
-    using namespace GPS;
-    using namespace XML;
-    using namespace boost::algorithm;
-
-
-
-
-    const struct consts {
-        const std::string name = "name";
-        const std::string latitude = "lat";
-        const std::string longitude = "lon";
-        const std::string elevation = "ele";
-        const std::string stage = "time";
-        const std::string track = "trk";
-        const std::string trackPoint = "trkpt";
-        const std::string trackSegment = "trkseg";
-        const std::string gpxCode = "gpx";
-        const std::string route = "rte";
-        const std::string routePoint = "rtept";
+    
+    // Constants to reference using 'gpxFormat.CONSTANT'
+    const struct gpxStruct {
+        const std::string 
+        name = "name", 
+        latitude = "lat", 
+        longitude = "lon", 
+        elevation = "ele", 
+        stage = "time", 
+        track = "trk", 
+        trackPoint = "trkpt", 
+        trackSegment = "trkseg", 
+        gpxCode = "gpx", 
+        route = "rte", 
+        routePoint = "rtept";
     } gpxFormat;
 
     // Throws domain errors when elements or attributes are missing from the GPX string.
     std::domain_error domError(std::string missingElement, bool attribute = false){
-        const std::string errorpt1 = "Missing '";
+        const std::string errorMessage = "Missing '";
         const std::string errorElement = "' element.";
         const std::string errorAttribute = "' attribute.";
         std::string error;
         if(attribute == true){
-            error = errorpt1 + missingElement + errorAttribute;
+            error = errorMessage + missingElement + errorAttribute;
         }else {
-            error = errorpt1 + missingElement + errorElement;
+            error = errorMessage + missingElement + errorElement;
         }
         return std::domain_error(error);
     }
@@ -51,7 +46,7 @@ namespace GPX {
     }
 
     // Check for root XML elements.
-    void continsAttributes(Element candidateElement) {
+    void containsAttributes(Element candidateElement) {
         if (candidateElement.getName() != gpxFormat.gpxCode) throw domError(gpxFormat.gpxCode);
         if (! candidateElement.containsSubElement(gpxFormat.route)) throw domError(gpxFormat.route);
         if (! candidateElement.getSubElement(gpxFormat.route).containsSubElement(gpxFormat.routePoint)) throw domError(gpxFormat.routePoint);
@@ -69,7 +64,7 @@ namespace GPX {
 
     // Checks for LAT and LON elements, returns a position depending on contents of element. Throws an error if they are not present.
     Position parsePosition(Element element) {
-        std::string lat, lon,el;
+        std::string lat, lon, el;
         if (! element.containsAttribute(gpxFormat.latitude)) throw domError(gpxFormat.latitude, true);
         if (! element.containsAttribute(gpxFormat.longitude)) throw domError(gpxFormat.longitude, true);
         lat = element.getAttribute(gpxFormat.latitude);
@@ -89,10 +84,10 @@ namespace GPX {
 
         Element rootElement = Parser(source).parseRootElement();
         // Check if root structue exists
-        continsAttributes(rootElement);
+        containsAttributes(rootElement);
 
         for (int num = 0; num < (int)rootElement.getSubElement(gpxFormat.route).countSubElements(gpxFormat.routePoint); ++num) {
-            Element routePoint = rootElement.getSubElement(gpxFormat.route).getSubElement(gpxFormat.routePoint,num);
+            Element routePoint = rootElement.getSubElement(gpxFormat.route).getSubElement(gpxFormat.routePoint, num);
             Position Pos = parsePosition(routePoint);
             std::string name = getName(routePoint);
             result.push_back({Pos, name});
@@ -100,8 +95,9 @@ namespace GPX {
     return result;
     }
 
+
     TrackPoint parseTrackPoint(Element element) {
-        Position resultpos = parsePosition(element);
+        Position resultPosition = parsePosition(element);
         std::string lat, lon, name = getName(element), time;
         tm t;
         std::istringstream iss;
@@ -110,7 +106,7 @@ namespace GPX {
         iss.str(time);
         iss >> std::get_time(&t,"%Y-%m-%dT%H:%M:%SZ");
         if (iss.fail()) throw std::domain_error("Malformed date/time content: " + time);
-        return {resultpos, name, t};
+        return {resultPosition, name, t};
     }
 
     std::vector<TrackPoint> parseTrack(std::string source, bool isFileName) {
