@@ -5,11 +5,7 @@
 #include <list>
 #include <vector>
 #include <istream>
-#include <sstream>
-#include <algorithm>
-#include <map>
-#include <regex>
-#include <assert.h>
+
 #include "position.h"
 
 namespace NMEA
@@ -71,6 +67,7 @@ namespace NMEA
    * Pre-condition: the parameter is a well-formed NMEA sentence.
    */
   SentenceData parseSentenceData(std::string);
+
 
   /* Computes a Position from NMEA Sentence Data.
    * Currently only supports the GLL, GGA and RMC sentence formats.

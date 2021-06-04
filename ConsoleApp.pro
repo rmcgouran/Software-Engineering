@@ -10,10 +10,16 @@ HEADERS += \
     headers/geometry.h \
     headers/logs.h \
     headers/parseGPX.h \
+    headers/points.h \
     headers/position.h \
+    headers/route.h \
+    headers/track.h \
     headers/types.h \
     headers/xml/element.h \
     headers/xml/parser.h
+
+SOURCES += \
+    apps/consoleApp.cpp
 
 SOURCES += \
     src/earth.cpp \
@@ -21,19 +27,14 @@ SOURCES += \
     src/logs.cpp \
     src/parseGPX.cpp \
     src/position.cpp \
+    src/route.cpp \
+    src/track.cpp \
     src/xml/element.cpp \
     src/xml/parser.cpp
-    
-SOURCES += \
-    tests/gpx/parseGPX-tests.cpp \
-    tests/gpx/parseRoute-tests.cpp \
-    tests/gpx/parseTrack-tests.cpp \
-    tests/xml/parser-tests.cpp
+
 
 INCLUDEPATH += headers/ headers/xml/
 
 OBJECTS_DIR = $$_PRO_FILE_PWD_/bin/
 DESTDIR = $$_PRO_FILE_PWD_/bin/
-TARGET = parseGPX-tests
-
-LIBS += -lboost_unit_test_framework
+TARGET = console-app

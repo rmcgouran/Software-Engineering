@@ -9,31 +9,32 @@ HEADERS += \
     headers/earth.h \
     headers/geometry.h \
     headers/logs.h \
-    headers/parseGPX.h \
+    headers/points.h \
     headers/position.h \
     headers/types.h \
+    headers/gridworld/gridworld_model.h \
+    headers/gridworld/gridworld_route.h \
+    headers/gridworld/gridworld_track.h \
     headers/xml/element.h \
-    headers/xml/parser.h
+    headers/xml/generator.h
+
+SOURCES += \
+    apps/generateGPX.cpp
 
 SOURCES += \
     src/earth.cpp \
     src/geometry.cpp \
     src/logs.cpp \
-    src/parseGPX.cpp \
     src/position.cpp \
+    src/gridworld/gridworld_model.cpp \
+    src/gridworld/gridworld_route.cpp \
+    src/gridworld/gridworld_track.cpp \
     src/xml/element.cpp \
-    src/xml/parser.cpp
-    
-SOURCES += \
-    tests/gpx/parseGPX-tests.cpp \
-    tests/gpx/parseRoute-tests.cpp \
-    tests/gpx/parseTrack-tests.cpp \
-    tests/xml/parser-tests.cpp
+    src/xml/generator.cpp
 
-INCLUDEPATH += headers/ headers/xml/
+
+INCLUDEPATH += headers/ headers/xml/ headers/gridworld
 
 OBJECTS_DIR = $$_PRO_FILE_PWD_/bin/
 DESTDIR = $$_PRO_FILE_PWD_/bin/
-TARGET = parseGPX-tests
-
-LIBS += -lboost_unit_test_framework
+TARGET = generateGPX

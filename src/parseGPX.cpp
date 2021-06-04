@@ -1,142 +1,327 @@
+#include <sstream>
+#include <fstream>
+#include <iomanip>
+
+#include "xml/parser.h"
+
 #include "parseGPX.h"
 
-namespace GPX {
-    
-    // Constants to reference using 'gpxFormat.CONSTANT'
-    const struct gpxStruct {
-        const std::string 
-        name = "name", 
-        latitude = "lat", 
-        longitude = "lon", 
-        elevation = "ele", 
-        stage = "time", 
-        track = "trk", 
-        trackPoint = "trkpt", 
-        trackSegment = "trkseg", 
-        gpxCode = "gpx", 
-        route = "rte", 
-        routePoint = "rtept";
-    } gpxFormat;
+namespace GPX
+{
+  std::vector<GPS::RoutePoint> parseRoute(std::string source, bool isFileName)
+  {
+      using namespace std;
+      using namespace GPS;
+      using namespace XML;
+      int num,i,j,total,skipped;
+      metres deltaH,deltaV;
+      string lat,lon,el,name;
+      ostringstream oss,oss2;
+      std::vector<RoutePoint> result;
+      Element ele = SelfClosingElement("",{}), temp = ele, temp2 = ele; // Work-around because there's no public constructor in Element.
+      Position startPos(0,0), prevPos = startPos, nextPos = startPos; // Same thing but for Position.
+      if (isFileName) {
+          ifstream fs(source);
+          if (! fs.good()) throw invalid_argument("Error opening source file '" + source + "'.");
+          oss << "Source file '" << source << "' opened okay." << endl;
+          while (fs.good()) {
+              getline(fs, name); // Using name as temporary variable as we don't need it until later
+              oss2 << name << endl;
+          }
+          source = oss2.str();
+      }
+      ele = Parser(source).parseRootElement();
+      if (ele.getName() != "gpx") throw domain_error("Missing 'gpx' element.");
+      if (! ele.containsSubElement("rte")) throw domain_error("Missing 'rte' element.");
+      ele = ele.getSubElement("rte");
+      /*
+        if (ele.containsSubElement("name")) {
+          temp = ele.getSubElement("name");
+          name = temp.getLeafContent();
+          i = name.find_first_not_of(' ');
+          j = name.find_last_not_of(' ');
+          routeName = (i == -1) ? "" : name.substr(i,j-i+1);
+          oss << "Route name is: " << routeName << endl;
+      }
+      */
+      num = 0;
+      if (! ele.containsSubElement("rtept")) throw domain_error("Missing 'rtept' element.");
+      total = ele.countSubElements("rtept");
+      temp = ele.getSubElement("rtept");
+      if (! temp.containsAttribute("lat")) throw domain_error("Missing 'lat' attribute.");
+      if (! temp.containsAttribute("lon")) throw domain_error("Missing 'lon' attribute.");
+      lat = temp.getAttribute("lat");
+      lon = temp.getAttribute("lon");
+      if (temp.containsSubElement("ele")) {
+          temp2 = temp.getSubElement("ele");
+          el = temp2.getLeafContent();
+          Position startPos = Position(lat,lon,el);
+          result.push_back({startPos,""});
+          oss << "Position added: " << endl; // << startPos.toString() << endl; // Need to update since removing toString()
+          ++num;
+      } else {
+          Position startPos = Position(lat,lon);
+          result.push_back({startPos,""});
+          oss << "Position added: " << endl; // << startPos.toString() << endl; // Need to update since removing toString()
+          ++num;
+      }
+      if (temp.containsSubElement("name")) {
+          temp2 = temp.getSubElement("name");
+          name = temp2.getLeafContent();
+          i = name.find_first_not_of(' ');
+          j = name.find_last_not_of(' ');
+          name = (i == -1) ? "" : name.substr(i,j-i+1);
+      } else name = ""; // Fixed bug by adding this.
+      result.front().name = name;
+      prevPos = result.back().position, nextPos = result.back().position;
+      skipped = 0;
+      while (num+skipped < total) {
+          temp = ele.getSubElement("rtept",num+skipped);
+          if (! temp.containsAttribute("lat")) throw domain_error("Missing 'lat' attribute.");
+          if (! temp.containsAttribute("lon")) throw domain_error("Missing 'lon' attribute.");
+          lat = temp.getAttribute("lat");
+          lon = temp.getAttribute("lon");
+          if (temp.containsSubElement("ele")) {
+              temp2 = temp.getSubElement("ele");
+              el = temp2.getLeafContent();
+              nextPos = Position(lat,lon,el);
+          } else nextPos = Position(lat,lon);
+          /*
+          if (areSameLocation(nextPos, prevPos))
+          {
+              oss << "Position ignored: " << nextPos.toString() << endl;
+              ++skipped;
+          }
+          else {
+          */
+              if (temp.containsSubElement("name")) {
+                  temp2 = temp.getSubElement("name");
+                  name = temp2.getLeafContent();
+                  i = name.find_first_not_of(' ');
+                  j = name.find_last_not_of(' ');
+                  // if (i == string::npos)
+                  // {
+                  //    name = "";
+                  // }
+                  // else
+                  // {
+                  //   name.erase(0,i);
+                  //   j = name.find_last_not_of(' ');
+                  //   name.erase(j+1);
+                  // }
+                  name = (i == -1) ? "" : name.substr(i,j-i+1); // So much shorter than Ken's version :)
+              } else name = ""; // Fixed bug by adding this.
+              result.push_back({nextPos,name});
+              oss << "Position added: " << endl; // << nextPos.toString() << endl; // Need to update since removing toString()
+              ++num;
+              prevPos = nextPos;
+          // }
+      }
+      oss << num << " positions added." << endl;
+      // cout << oss.str();
+      return result;
+  }
 
-    // Throws domain errors when elements or attributes are missing from the GPX string.
-    std::domain_error domError(std::string missingElement, bool attribute = false){
-        const std::string errorMessage = "Missing '";
-        const std::string errorElement = "' element.";
-        const std::string errorAttribute = "' attribute.";
-        std::string error;
-        if(attribute == true){
-            error = errorMessage + missingElement + errorAttribute;
-        }else {
-            error = errorMessage + missingElement + errorElement;
-        }
-        return std::domain_error(error);
-    }
-
-    // Return GPX file as a string.
-    std::string parseFile(std::string filename) {
-        std::ostringstream  oss;
-        std::string name;
-        std::ifstream fs(filename);
-        if (! fs.good()) throw std::invalid_argument("Error opening source file '" + filename + "'.");
-        while (fs.good()) {
-            getline(fs, name);
-            oss << name << std::endl;
-        }
-    return oss.str();
-    }
-
-    // Check for root XML elements.
-    void containsAttributes(Element candidateElement) {
-        if (candidateElement.getName() != gpxFormat.gpxCode) throw domError(gpxFormat.gpxCode);
-        if (! candidateElement.containsSubElement(gpxFormat.route)) throw domError(gpxFormat.route);
-        if (! candidateElement.getSubElement(gpxFormat.route).containsSubElement(gpxFormat.routePoint)) throw domError(gpxFormat.routePoint);
-    }
-
-    // Checks for the sub element "name" then removes 'white space' before and after.
-    std::string getName(Element element){
-        std::string name;
-        if (element.containsSubElement(gpxFormat.name)) {
-            name = element.getSubElement(gpxFormat.name).getLeafContent();
-            trim(name);
-        }
-        return name;
-    }
-
-    // Checks for LAT and LON elements, returns a position depending on contents of element. Throws an error if they are not present.
-    Position parsePosition(Element element) {
-        std::string lat, lon, el;
-        if (! element.containsAttribute(gpxFormat.latitude)) throw domError(gpxFormat.latitude, true);
-        if (! element.containsAttribute(gpxFormat.longitude)) throw domError(gpxFormat.longitude, true);
-        lat = element.getAttribute(gpxFormat.latitude);
-        lon = element.getAttribute(gpxFormat.longitude);
-        // Includes elevation element if it exists.
-        if (element.containsSubElement(gpxFormat.elevation)) {
-            el = element.getSubElement(gpxFormat.elevation).getLeafContent();
-            return Position(lat, lon, el);
-        } else {
-            return Position(lat, lon);
-        }
-    }
-
-    std::vector<RoutePoint> parseRoute(std::string source, bool isFileName) {
-        std::vector<RoutePoint> result;
-        if (isFileName) source = parseFile(source);
-
-        Element rootElement = Parser(source).parseRootElement();
-        // Check if root structue exists
-        containsAttributes(rootElement);
-
-        for (int num = 0; num < (int)rootElement.getSubElement(gpxFormat.route).countSubElements(gpxFormat.routePoint); ++num) {
-            Element routePoint = rootElement.getSubElement(gpxFormat.route).getSubElement(gpxFormat.routePoint, num);
-            Position Pos = parsePosition(routePoint);
-            std::string name = getName(routePoint);
-            result.push_back({Pos, name});
-        }
-    return result;
-    }
-
-
-    TrackPoint parseTrackPoint(Element element) {
-        Position resultPosition = parsePosition(element);
-        std::string lat, lon, name = getName(element), time;
-        tm t;
-        std::istringstream iss;
-        if (! element.containsSubElement(gpxFormat.stage)) throw domError(gpxFormat.stage);
-        time = element.getSubElement(gpxFormat.stage).getLeafContent();
-        iss.str(time);
-        iss >> std::get_time(&t,"%Y-%m-%dT%H:%M:%SZ");
-        if (iss.fail()) throw std::domain_error("Malformed date/time content: " + time);
-        return {resultPosition, name, t};
-    }
-
-    std::vector<TrackPoint> parseTrack(std::string source, bool isFileName) {
-        int num = 0, total;
-        std::vector<TrackPoint> result;
-        if (isFileName) source = parseFile(source);
-        Element rootElement = Parser(source).parseRootElement();
-        if (rootElement.getName() != gpxFormat.gpxCode) throw domError(gpxFormat.gpxCode);
-        if (! rootElement.containsSubElement(gpxFormat.track)) throw domError(gpxFormat.track);
-        Element trackElement = rootElement.getSubElement(gpxFormat.track);
-        if (trackElement.containsSubElement(gpxFormat.trackSegment)) {
-            for (int segNum = 0; segNum < (int)trackElement.countSubElements(gpxFormat.trackSegment); ++segNum) {
-                Element trackSegment = trackElement.getSubElement(gpxFormat.trackSegment,segNum);
-                if (! trackSegment.containsSubElement(gpxFormat.trackPoint)) throw domError(gpxFormat.trackPoint);
-                    total = trackSegment.countSubElements(gpxFormat.trackPoint);
-                    num = 0;
-                    while (num < total) {
-                        Element trackPointElement = trackSegment.getSubElement(gpxFormat.trackPoint,num);
-                        TrackPoint trackPoint = parseTrackPoint(trackPointElement);
-                        result.push_back(trackPoint);
-                        ++num;
-                    }
-            }
-        } else if (! trackElement.containsSubElement(gpxFormat.trackPoint)) throw domError(gpxFormat.trackPoint);
-            for (int num = 0; num < (int)trackElement.countSubElements(gpxFormat.trackPoint); ++num) {
-                Element trackPointElement = trackElement.getSubElement(gpxFormat.trackPoint,num);
-                TrackPoint trackPoint = parseTrackPoint(trackPointElement);
-                result.push_back(trackPoint);
-            }
-
-    return result;
-    }
+  std::vector<GPS::TrackPoint> parseTrack(std::string source, bool isFileName)
+  {
+      using namespace std;
+      using namespace GPS;
+      using namespace XML;
+      int num,i,j,total,skipped;
+      metres deltaH,deltaV;
+      string lat,lon,el,name,time;
+      tm t;
+      ostringstream oss,oss2;
+      istringstream iss;
+      std::vector<TrackPoint> result;
+      Element ele = SelfClosingElement("",{}), temp = ele, temp2 = ele, ele2 = ele; // Work-around because there's no public constructor in Element.
+      Position startPos(0,0), prevPos = startPos, nextPos = startPos; // Same thing but for Position.
+      if (isFileName) {
+          ifstream fs(source);
+          if (! fs.good()) throw invalid_argument("Error opening source file '" + source + "'.");
+          oss << "Source file '" << source << "' opened okay." << endl;
+          while (fs.good()) {
+              getline(fs, name); // Using name as temporary variable as we don't need it until later
+              oss2 << name << endl;
+          }
+          source = oss2.str();
+      }
+      ele = Parser(source).parseRootElement();
+      if (ele.getName() != "gpx") throw domain_error("Missing 'gpx' element.");
+      if (! ele.containsSubElement("trk")) throw domain_error("Missing 'trk' element.");
+      ele = ele.getSubElement("trk");
+      /*
+      if (ele.containsSubElement("name")) {
+          temp = ele.getSubElement("name");
+          name = temp.getLeafContent();
+          i = name.find_first_not_of(' ');
+          j = name.find_last_not_of(' ');
+          routeName = (i == -1) ? "" : name.substr(i,j-i+1);
+          oss << "Track name is: " << routeName << endl;
+      }
+      */
+      num = 0;
+      if (! ele.containsSubElement("trkseg")) {
+          if (! ele.containsSubElement("trkpt")) throw domain_error("Missing 'trkpt' element.");
+          total = ele.countSubElements("trkpt");
+          temp = ele.getSubElement("trkpt");
+          if (! temp.containsAttribute("lat")) throw domain_error("Missing 'lat' attribute.");
+          if (! temp.containsAttribute("lon")) throw domain_error("Missing 'lon' attribute.");
+          lat = temp.getAttribute("lat");
+          lon = temp.getAttribute("lon");
+          if (temp.containsSubElement("ele")) {
+              temp2 = temp.getSubElement("ele");
+              el = temp2.getLeafContent();
+              startPos = Position(lat,lon,el);
+              result.push_back({startPos,name,t});
+              oss << "Position added: " << endl; // << startPos.toString() << endl; // Need to update since removing toString()
+              ++num;
+          } else {
+              startPos = Position(lat,lon);
+              result.push_back({startPos,name,t});
+              oss << "Position added: " << endl; // << startPos.toString() << endl; // Need to update since removing toString()
+              ++num;
+          }
+          if (temp.containsSubElement("name")) {
+              temp2 = temp.getSubElement("name");
+              name = temp2.getLeafContent();
+              i = name.find_first_not_of(' ');
+              j = name.find_last_not_of(' ');
+              name = (i == -1) ? "" : name.substr(i,j-i+1);
+          } else name = ""; // Fixed bug by adding this.
+          result.back().name = name;
+          if (! temp.containsSubElement("time")) throw domain_error("Missing 'time' element.");
+          temp2 = temp.getSubElement("time");
+          time = temp2.getLeafContent();
+          iss.str(time);
+          iss >> std::get_time(&t,"%Y-%m-%dT%H:%M:%SZ");
+          if (iss.fail()) throw std::domain_error("Malformed date/time content: " + time);
+          result.back().dateTime = t;
+          prevPos = result.back().position, nextPos = result.back().position;
+          skipped = 0;
+          while (num+skipped < total) {
+              temp = ele.getSubElement("trkpt",num+skipped);
+              if (! temp.containsAttribute("lat")) throw domain_error("Missing 'lat' attribute.");
+              if (! temp.containsAttribute("lon")) throw domain_error("Missing 'lon' attribute.");
+              lat = temp.getAttribute("lat");
+              lon = temp.getAttribute("lon");
+              if (temp.containsSubElement("ele")) {
+                  temp2 = temp.getSubElement("ele");
+                  el = temp2.getLeafContent();
+                  nextPos = Position(lat,lon,el);
+              } else nextPos = Position(lat,lon);
+              if (! temp.containsSubElement("time")) throw domain_error("Missing 'time' element.");
+              temp2 = temp.getSubElement("time");
+              time = temp2.getLeafContent();
+              iss.str(time);
+              iss >> std::get_time(&t,"%Y-%m-%dT%H:%M:%SZ");
+              if (iss.fail()) throw std::domain_error("Malformed date/time content: " + time);
+              /* if (areSameLocation(nextPos, prevPos)) {
+                  oss << "Position ignored: " << nextPos.toString() << endl;
+                  ++skipped;
+              } else {
+              */
+                  if (temp.containsSubElement("name")) {
+                      temp2 = temp.getSubElement("name");
+                      name = temp2.getLeafContent();
+                      i = name.find_first_not_of(' ');
+                      j = name.find_last_not_of(' ');
+                      name = (i == -1) ? "" : name.substr(i,j-i+1);
+                  } else name = ""; // Fixed bug by adding this.
+                  result.push_back({nextPos,name,t});
+                  oss << "Position added: " << endl; // << nextPos.toString() << endl; // Need to update since removing toString()
+                  oss << " at time: " << std::put_time(&t,"%c") << endl;
+                  ++num;
+                  prevPos = nextPos;
+              // }
+          }
+      }
+      else
+      {
+          for (unsigned int segNum = 0; segNum < ele.countSubElements("trkseg"); ++segNum) {
+              ele2 = ele.getSubElement("trkseg",segNum);
+              if (! ele2.containsSubElement("trkpt")) throw domain_error("Missing 'trkpt' element.");
+              total = ele2.countSubElements("trkpt");
+              skipped = -num; // Setting skipped to start at -num (rather than 0) cancels any points accumulated from previous segments
+                              // We have to set it here, rather than just before the loop, because num may increment in the next if-statement
+              if (segNum == 0) {
+                  temp = ele2.getSubElement("trkpt");
+                  if (! temp.containsAttribute("lat")) throw domain_error("Missing 'lat' attribute.");
+                  if (! temp.containsAttribute("lon")) throw domain_error("Missing 'lon' attribute.");
+                  lat = temp.getAttribute("lat");
+                  lon = temp.getAttribute("lon");
+                  if (temp.containsSubElement("ele")) {
+                      temp2 = temp.getSubElement("ele");
+                      el = temp2.getLeafContent();
+                      startPos = Position(lat,lon,el);
+                      result.push_back({startPos,name,t});
+                      oss << "Position added: " << endl; // << startPos.toString() << endl; // Need to update since removing toString()
+                      ++num;
+                  }
+                  else {
+                      startPos = Position(lat,lon);
+                      result.push_back({startPos,name,t});
+                      oss << "Position added: " << endl; // << startPos.toString() << endl; // Need to update since removing toString()
+                      ++num;
+                  }
+                  if (temp.containsSubElement("name")) {
+                      temp2 = temp.getSubElement("name");
+                      name = temp2.getLeafContent();
+                      i = name.find_first_not_of(' ');
+                      j = name.find_last_not_of(' ');
+                      name = (i == -1) ? "" : name.substr(i,j-i+1);
+                  } else name = ""; // Fixed bug by adding this.
+                  result.back().name = name;
+                  if (! temp.containsSubElement("time")) throw domain_error("Missing 'time' element.");
+                  temp2 = temp.getSubElement("time");
+                  time = temp2.getLeafContent();
+                  iss.str(time);
+                  iss >> std::get_time(&t,"%Y-%m-%dT%H:%M:%SZ");
+                  if (iss.fail()) throw std::domain_error("Malformed date/time content: " + time);
+                  result.back().dateTime = t;
+             }
+             prevPos = result.back().position, nextPos = result.back().position;
+             while (num+skipped < total) {
+                 temp = ele2.getSubElement("trkpt",num+skipped);
+                 if (! temp.containsAttribute("lat")) throw domain_error("Missing 'lat' attribute.");
+                 if (! temp.containsAttribute("lon")) throw domain_error("Missing 'lon' attribute.");
+                 lat = temp.getAttribute("lat");
+                 lon = temp.getAttribute("lon");
+                 if (temp.containsSubElement("ele")) {
+                     temp2 = temp.getSubElement("ele");
+                     el = temp2.getLeafContent();
+                     nextPos = Position(lat,lon,el);
+                 } else nextPos = Position(lat,lon);
+                 if (! temp.containsSubElement("time")) throw domain_error("Missing 'time' element.");
+                 temp2 = temp.getSubElement("time");
+                 time = temp2.getLeafContent();
+                 iss.str(time);
+                 iss >> std::get_time(&t,"%Y-%m-%dT%H:%M:%SZ");
+                 if (iss.fail()) throw std::domain_error("Malformed date/time content: " + time);
+                 /*
+                 if (areSameLocation(nextPos, prevPos)) {
+                     oss << "Position ignored: " << nextPos.toString() << endl;
+                     ++skipped;
+                 } else {
+                 */
+                     if (temp.containsSubElement("name")) {
+                         temp2 = temp.getSubElement("name");
+                         name = temp2.getLeafContent();
+                         i = name.find_first_not_of(' ');
+                         j = name.find_last_not_of(' ');
+                         name = (i == -1) ? "" : name.substr(i,j-i+1);
+                     } else name = ""; // Fixed bug by adding this.
+                     result.push_back({nextPos,name,t});
+                     oss << "Position added: " << endl; // << nextPos.toString() << endl; // Need to update since removing toString()
+                     oss << " at time: " << std::put_time(&t,"%c") << endl;
+                     ++num;
+                     prevPos = nextPos;
+                 // }
+             }
+          }
+      }
+      oss << num << " positions added." << endl;
+      // cout << oss.str();
+      return result;
+  }
 }
